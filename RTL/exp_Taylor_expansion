@@ -34,6 +34,7 @@ end
 
 //calculate y
 //y = floor(x/ln2)
+// reg [7:0]=0
 wire [15:0] div_result;
 wire        div_overflow;
 reg  [15:0] y_reg = 0;
@@ -55,11 +56,11 @@ fxp_div_pipe #(
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn ) begin
-        y_reg <= 16'd0;
+        y_reg <= 16'b0;
     end else begin
     if (div_overflow == 1) begin
-        y_reg <= 16'd0;
-        //err <= 1'd0;
+        y_reg <= 16'b0;
+        //err <= 1'b0;
     end else begin
         y_reg [15:8] <= div_result [15:8];
     end
@@ -89,7 +90,7 @@ fxp_mul_pipe #(
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn) begin
-        ln2y_reg <= 16'd0;       
+        ln2y_reg <= 16'b0;       
     end else begin
         ln2y_reg [15:8] <= ln2y_result;
     end
@@ -117,11 +118,11 @@ fxp_addsub #(
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn ) begin
-        z_reg <= 16'd0;
+        z_reg <= 16'b0;
     end else begin
     if (z_overflow == 1) begin
-        z_reg <= 16'd0;
-        //err <= 1'd0;
+        z_reg <= 16'b0;
+        //err <= 1'b0;
     end else begin
         z_reg  <= z_result;
     end
@@ -134,13 +135,13 @@ reg [15:0] zp1_reg;
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn ) begin
-        zp1_reg <= 16'd0;
-        zd2_reg <= 16'd0;
+        zp1_reg <= 16'b0;
+        zd2_reg <= 16'b0;
     end else begin
     if (z_reg [15]== 1) begin
-        zp1_reg <= 16'd0;
-        zd2_reg <= 16'd0;
-        //err <= 1'd0;
+        zp1_reg <= 16'b0;
+        zd2_reg <= 16'b0;
+        //err <= 1'b0;
     end else begin
         zp1_reg <= z_reg + ONE;
         zd2_reg <= (z_reg[0] == 1) ? (z_reg >> 1) + 1 : (z_reg >> 1);
@@ -168,7 +169,7 @@ fxp_div_pipe #(
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn) begin
-        zd3_reg <= 16'd0;       
+        zd3_reg <= 16'b0;       
     end else begin
         zd3_reg  <= zd3_result;
     end
@@ -195,7 +196,7 @@ fxp_mul_pipe #(
 
 always @(posedge clk or negedge rstn) begin
 if (!rstn) begin
-    z2d2_reg    <= 16'd0;
+    z2d2_reg    <= 16'b0;
 end else begin
     z2d2_reg <= z2d2_result;
 end
@@ -222,7 +223,7 @@ fxp_mul_pipe #(
 
 always @(posedge clk or negedge rstn) begin
 if (!rstn) begin
-    z3d6_reg    <= 16'd0;
+    z3d6_reg    <= 16'b0;
 end else begin
     z3d6_reg <=z3d6_result;
 end
@@ -230,42 +231,52 @@ end
 
 always @(posedge clk or negedge rstn) begin
 if (!rstn) begin
-    z2d2_reg    <= 16'd0;
+    z2d2_reg    <= 16'b0;
 end else begin
     z2d2_reg <= z2d2_result;
 end
 end
 
-reg [15:0] result;
+//e^z=1+z+z^2/2+z^3/6
+reg [15:0] ez_reg;
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn) begin
-        result <= 16'd0;  // 复位时清零
+        ez_reg <= 16'b0;  // 复位时清零
     end else begin
     if ((z_reg[15]|z2d2_reg[15]|z3d6_reg[15] ) ==1 )begin
-        result <= 16'd0;  // 复位时清零
+        ez_reg <= 16'b0;  // 复位时清零
     end else begin
-        result <= z3d6_reg + z2d2_reg + zp1_reg;  // 计算结果
+        ez_reg <= z3d6_reg + z2d2_reg + zp1_reg;  // 计算结果
     end
 end
 end
 
+//e^x=2^y mul e^z
+reg [15:0] shift_result = 16'b0;
+
 always @(posedge clk or negedge rstn) begin
     if (!rstn) begin
-        out_result <= 16'd0;
-    end else if (result[15] == 1) begin  // 检查溢出
-        out_result <= 16'd0;
+        out_result <= 16'b0;
+        shift_result <= 16'b0;
+    end else if (ez_reg[15] == 1) begin  // 检查溢出
+        out_result <= 16'b0;
+    end else if (|y_reg ==0 )begin 
+        out_result <= ez_reg;
+        //shift_result <= 16'b0;
     end else begin
-        out_result <= result;
+        //shift_result <= 16'h0100 <<($signed(y_reg [15:8]));
+        //out_result   <= shift_result mul ez_reg;
+        out_result <= ez_reg <<($signed(y_reg [15:8]));
     end
 end
 
 always @(posedge clk or negedge rstn) begin
     if (!rstn) begin
-        err <= 1'd0;  // 复位时清零
+        err <= 1'b0;  // 复位时清零
     end else begin
-    if (result[15]|z_reg [15]|z2d2_reg [15]|z3d6_reg[15] )
-        err <= 1'd1;  // 计算结果
+    if (out_result[15]|ez_reg [15]|z_reg [15]|z2d2_reg [15]|z3d6_reg[15] == 1)
+        err <= 1'b1;  // 计算结果
     end
 end
 endmodule
